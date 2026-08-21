@@ -1,0 +1,6 @@
+{
+  "name": "Makao",
+  "description": "Mobile App for Makao Real Estate Platform — A Sena Global Company Limited. Smart rental discovery, tenant applications, M-Pesa STK Push rent & deposit payments, wallet management, tenant credit score tracking, and landlord/admin analytics across Kenya.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
