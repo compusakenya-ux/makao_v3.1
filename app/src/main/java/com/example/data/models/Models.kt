@@ -84,3 +84,29 @@ data class UserWallet(
     @PrimaryKey val id: Int = 1,
     val balance: Int = 150000
 )
+
+@Entity(tableName = "maintenance_requests")
+data class MaintenanceRequest(
+    @PrimaryKey val id: String, // e.g. "MAINT1001"
+    val propertyTitle: String,
+    val tenantName: String,
+    val issueType: String, // "Plumbing", "Electrical", "Security", "General"
+    val description: String,
+    val urgency: String, // "Low", "Medium", "Emergency"
+    val dateReported: String,
+    val status: String = "Open", // "Open", "Assigned", "Resolved"
+    val estimatedCost: Int = 0
+)
+
+@Entity(tableName = "escrow_records")
+data class EscrowRecord(
+    @PrimaryKey val id: String, // e.g. "ESC901"
+    val bookingId: String,
+    val propertyTitle: String,
+    val tenantName: String,
+    val depositAmount: Int,
+    val status: String = "Held in Escrow", // "Held in Escrow", "Released", "Disputed", "Refunded"
+    val heldDate: String,
+    val leaseEndDate: String
+)
+

@@ -1,6 +1,8 @@
 package com.example.data.repository
 
 import com.example.data.db.MakaoDao
+import com.example.data.models.EscrowRecord
+import com.example.data.models.MaintenanceRequest
 import com.example.data.models.Property
 import com.example.data.models.PropertyBooking
 import com.example.data.models.RentalApplication
@@ -18,6 +20,8 @@ class MakaoRepository(private val dao: MakaoDao) {
     val allTransactions: Flow<List<WalletTransaction>> = dao.getAllTransactions()
     val wallet: Flow<UserWallet?> = dao.getWallet()
     val allCreditRatings: Flow<List<TenantCreditRating>> = dao.getAllCreditRatings()
+    val allMaintenanceRequests: Flow<List<MaintenanceRequest>> = dao.getAllMaintenanceRequests()
+    val allEscrowRecords: Flow<List<EscrowRecord>> = dao.getAllEscrowRecords()
 
     suspend fun seedDatabaseIfEmpty() {
         val existing = allProperties.firstOrNull()
@@ -26,7 +30,30 @@ class MakaoRepository(private val dao: MakaoDao) {
             dao.insertWallet(UserWallet(1, 150000))
             dao.insertTransactions(defaultTransactions)
             dao.insertCreditRatings(defaultCreditRatings)
+            defaultMaintenanceRequests.forEach { dao.insertMaintenanceRequest(it) }
+            defaultEscrowRecords.forEach { dao.insertEscrowRecord(it) }
         }
+    }
+
+    suspend fun resetDatabase() {
+        dao.insertProperties(defaultProperties)
+        dao.insertWallet(UserWallet(1, 150000))
+        dao.insertTransactions(defaultTransactions)
+        dao.insertCreditRatings(defaultCreditRatings)
+        defaultMaintenanceRequests.forEach { dao.insertMaintenanceRequest(it) }
+        defaultEscrowRecords.forEach { dao.insertEscrowRecord(it) }
+    }
+
+    suspend fun addProperty(property: Property) {
+        dao.insertProperty(property)
+    }
+
+    suspend fun deleteProperty(property: Property) {
+        dao.deleteProperty(property)
+    }
+
+    suspend fun updateProperty(property: Property) {
+        dao.updateProperty(property)
     }
 
     suspend fun toggleFavorite(property: Property) {
@@ -57,6 +84,10 @@ class MakaoRepository(private val dao: MakaoDao) {
         )
     }
 
+    suspend fun updateApplicationStatus(appId: String, newStatus: String) {
+        dao.updateApplicationStatus(appId, newStatus)
+    }
+
     suspend fun confirmBooking(booking: PropertyBooking) {
         dao.insertBooking(booking)
         // Deduct payment amount
@@ -64,11 +95,28 @@ class MakaoRepository(private val dao: MakaoDao) {
         val newBalance = (currentWallet.balance - booking.amountPaid).coerceAtLeast(0)
         dao.insertWallet(currentWallet.copy(balance = newBalance))
 
+        // Calculate 2 months deposit and put into escrow record
+        val rentEstimate = booking.amountPaid / 3
+        val depositAmount = rentEstimate * 2
+
+        dao.insertEscrowRecord(
+            EscrowRecord(
+                id = "ESC_${System.currentTimeMillis() % 100000}",
+                bookingId = booking.id,
+                propertyTitle = booking.propertyTitle,
+                tenantName = "You (Verified Tenant)",
+                depositAmount = depositAmount,
+                status = "Held in Escrow",
+                heldDate = "Today",
+                leaseEndDate = "12 Months from Move-in"
+            )
+        )
+
         // Record Transaction
         dao.insertTransaction(
             WalletTransaction(
                 id = "TXN_${System.currentTimeMillis() % 1000000}",
-                title = "Rent & Deposit — ${booking.propertyTitle}",
+                title = "Rent & Deposit Escrow — ${booking.propertyTitle}",
                 date = "Just now",
                 amount = booking.amountPaid,
                 type = "debit",
@@ -113,7 +161,78 @@ class MakaoRepository(private val dao: MakaoDao) {
         }
     }
 
+    suspend fun submitMaintenanceRequest(request: MaintenanceRequest) {
+        dao.insertMaintenanceRequest(request)
+    }
+
+    suspend fun updateMaintenanceStatus(request: MaintenanceRequest, newStatus: String) {
+        dao.updateMaintenanceRequest(request.copy(status = newStatus))
+    }
+
+    suspend fun updateEscrowStatus(record: EscrowRecord, newStatus: String) {
+        dao.updateEscrowRecord(record.copy(status = newStatus))
+    }
+
+    suspend fun adjustTenantCreditScore(rating: TenantCreditRating, delta: Int, additionalLateDays: Int = 0) {
+        val newScore = (rating.score + delta).coerceIn(100, 500)
+        val newDaysLate = (rating.daysLate + additionalLateDays).coerceAtLeast(0)
+        val newLabel = when {
+            newScore >= 400 -> "Excellent — Top-tier tenant"
+            newScore >= 300 -> "Good — Reliable tenant"
+            newScore >= 200 -> "Fair — Monitored tenant"
+            else -> "Poor — High risk tenant"
+        }
+        dao.updateCreditScore(rating.id, newScore, newDaysLate, newLabel)
+    }
+
     companion object {
+        val defaultMaintenanceRequests = listOf(
+            MaintenanceRequest(
+                id = "MAINT-101",
+                propertyTitle = "Skyline Studio — Kilimani",
+                tenantName = "John Kamau",
+                issueType = "Plumbing",
+                description = "Kitchen sink drainage pipe slow drip leaking into cabinet.",
+                urgency = "Medium",
+                dateReported = "Aug 20, 2026",
+                status = "Assigned",
+                estimatedCost = 3500
+            ),
+            MaintenanceRequest(
+                id = "MAINT-102",
+                propertyTitle = "The Nexus — Westlands",
+                tenantName = "Mary Wanjiku",
+                issueType = "Electrical",
+                description = "Master bedroom ceiling recessed LED spotlight fixture flickering.",
+                urgency = "Low",
+                dateReported = "Aug 18, 2026",
+                status = "Resolved",
+                estimatedCost = 1800
+            )
+        )
+
+        val defaultEscrowRecords = listOf(
+            EscrowRecord(
+                id = "ESC-801",
+                bookingId = "BKG98214",
+                propertyTitle = "Skyline Studio — Kilimani",
+                tenantName = "John Kamau",
+                depositAmount = 90000,
+                status = "Held in Escrow",
+                heldDate = "Jul 01, 2026",
+                leaseEndDate = "Jun 30, 2027"
+            ),
+            EscrowRecord(
+                id = "ESC-802",
+                bookingId = "BKG77432",
+                propertyTitle = "The Nexus — Westlands",
+                tenantName = "Mary Wanjiku",
+                depositAmount = 170000,
+                status = "Held in Escrow",
+                heldDate = "Aug 01, 2026",
+                leaseEndDate = "Jul 31, 2027"
+            )
+        )
         val defaultProperties = listOf(
             Property(
                 id = 1L,

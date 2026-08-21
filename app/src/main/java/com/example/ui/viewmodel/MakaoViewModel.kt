@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.db.MakaoDatabase
+import com.example.data.models.EscrowRecord
+import com.example.data.models.MaintenanceRequest
 import com.example.data.models.Property
 import com.example.data.models.PropertyBooking
 import com.example.data.models.RentalApplication
@@ -86,6 +88,21 @@ class MakaoViewModel(application: Application) : AndroidViewModel(application) {
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val maintenanceRequests: StateFlow<List<MaintenanceRequest>> = repository.allMaintenanceRequests.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val escrowRecords: StateFlow<List<EscrowRecord>> = repository.allEscrowRecords.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val showAddPropertyModal = MutableStateFlow(false)
+    val showMaintenanceModal = MutableStateFlow(false)
 
     // Filtered Properties Stream
     val filteredProperties: StateFlow<List<Property>> = combine(
@@ -216,6 +233,129 @@ class MakaoViewModel(application: Application) : AndroidViewModel(application) {
             repository.withdrawWallet(amount)
             showWithdrawModal.value = false
             showToast("Withdrawal Processed", "KSh $amount sent to your M-Pesa number")
+        }
+    }
+
+    fun approveApplication(appId: String) {
+        viewModelScope.launch {
+            repository.updateApplicationStatus(appId, "Approved")
+            showToast("Application Approved", "Tenant notified. Digital lease agreement drafted & ready for signing.")
+        }
+    }
+
+    fun rejectApplication(appId: String) {
+        viewModelScope.launch {
+            repository.updateApplicationStatus(appId, "Rejected")
+            showToast("Application Rejected", "Application marked as rejected. KSh 200 non-refundable fee retained.")
+        }
+    }
+
+    fun addNewProperty(
+        title: String,
+        location: String,
+        city: String,
+        estate: String,
+        type: String,
+        price: Int,
+        beds: Int,
+        baths: Int,
+        sqft: Int,
+        description: String,
+        amenities: String
+    ) {
+        viewModelScope.launch {
+            val newId = System.currentTimeMillis()
+            val property = Property(
+                id = newId,
+                title = title,
+                location = location,
+                city = city,
+                estate = estate,
+                type = type,
+                price = price,
+                beds = beds,
+                baths = baths,
+                sqft = sqft,
+                rating = 5.0,
+                badge = "new",
+                viewers = 1,
+                imageUrl = "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80",
+                description = description,
+                amenitiesJson = amenities,
+                neighborhood = "$estate, $city is a highly sought-after neighborhood.",
+                landlordName = "Makao Verified Partner",
+                availableUnits = 1,
+                totalUnits = 4
+            )
+            repository.addProperty(property)
+            showAddPropertyModal.value = false
+            showToast("Listing Published", "Property successfully added to Makao live database.")
+        }
+    }
+
+    fun deleteProperty(property: Property) {
+        viewModelScope.launch {
+            repository.deleteProperty(property)
+            showToast("Property Removed", "${property.title} was removed from the inventory.")
+        }
+    }
+
+    fun adjustTenantCreditScore(rating: TenantCreditRating, delta: Int, additionalLateDays: Int = 0) {
+        viewModelScope.launch {
+            repository.adjustTenantCreditScore(rating, delta, additionalLateDays)
+            val action = if (delta > 0) "awarded +$delta points" else "penalized $delta points"
+            showToast("Credit Score Updated", "${rating.tenantName} $action.")
+        }
+    }
+
+    fun submitMaintenanceRequest(
+        propertyTitle: String,
+        tenantName: String,
+        issueType: String,
+        description: String,
+        urgency: String
+    ) {
+        viewModelScope.launch {
+            val reqId = "MAINT-${(1000..9999).random()}"
+            val request = MaintenanceRequest(
+                id = reqId,
+                propertyTitle = propertyTitle,
+                tenantName = tenantName,
+                issueType = issueType,
+                description = description,
+                urgency = urgency,
+                dateReported = "Today",
+                status = "Open",
+                estimatedCost = when (urgency) {
+                    "Emergency" -> 8500
+                    "Medium" -> 3500
+                    else -> 1500
+                }
+            )
+            repository.submitMaintenanceRequest(request)
+            showMaintenanceModal.value = false
+            showToast("Ticket Created", "Maintenance ticket $reqId dispatched to property caretaker.")
+        }
+    }
+
+    fun updateMaintenanceStatus(request: MaintenanceRequest, newStatus: String) {
+        viewModelScope.launch {
+            repository.updateMaintenanceStatus(request, newStatus)
+            showToast("Ticket Updated", "${request.id} status changed to $newStatus.")
+        }
+    }
+
+    fun updateEscrowStatus(record: EscrowRecord, newStatus: String) {
+        viewModelScope.launch {
+            repository.updateEscrowStatus(record, newStatus)
+            showToast("Escrow Updated", "Escrow ${record.id} status updated to $newStatus.")
+        }
+    }
+
+    fun resetDatabase() {
+        viewModelScope.launch {
+            repository.resetDatabase()
+            showToast("Database Reset", "Default properties, escrow records, and seed data restored.")
         }
     }
 

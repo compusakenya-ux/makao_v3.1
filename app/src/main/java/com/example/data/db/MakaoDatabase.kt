@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.data.models.EscrowRecord
+import com.example.data.models.MaintenanceRequest
 import com.example.data.models.Property
 import com.example.data.models.PropertyBooking
 import com.example.data.models.RentalApplication
@@ -18,9 +20,11 @@ import com.example.data.models.WalletTransaction
         PropertyBooking::class,
         WalletTransaction::class,
         TenantCreditRating::class,
-        UserWallet::class
+        UserWallet::class,
+        MaintenanceRequest::class,
+        EscrowRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MakaoDatabase : RoomDatabase() {
